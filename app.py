@@ -18,4 +18,4 @@ def stock_info(ticker):
         return jsonify({'error': 'Invalid ticker'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
