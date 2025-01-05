@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/styles.css')}}">
+    <title>Stock Info App</title>
+  </head>
+  <body>
+    <h1>Stock Information Finder</h1>
+    <form id="stock-form">
+        <!-- <label for="stock-symbol">Stock Symbol:</label> -->
+        <input type="text" id="stock-symbol" name="stock-symbol" placeholder="Enter stock symbol: (INFY, MSFT, AAPL, etc.)">
+        <button type="submit">Get Info</button>
+    </form>
+    <div id="stock-info"></div>
+    <script src="{{url_for('static', filename='js/scripts.js')}}"></script>
+  </body>
