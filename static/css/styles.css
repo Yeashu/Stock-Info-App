@@ -35,6 +35,7 @@ form {
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-wrap: wrap; /* Allow wrapping */
 }
 
 input[type="text"] {
@@ -46,6 +47,7 @@ input[type="text"] {
     color: #333; /* Dark text for readability */
     font-size: 1em;
     margin-right: 10px;
+    flex: 1 1 auto; /* Allow flex grow and shrink */
 }
 
 button[type="submit"] {
@@ -57,13 +59,14 @@ button[type="submit"] {
     cursor: pointer;
     font-size: 1.2em;
     transition: background 0.3s ease;
+    flex: 1 1 auto; /* Allow flex grow and shrink */
 }
 
 button[type="submit"]:hover {
     background: #ffbf69; /* Hover state for button */
 }
 
-.results {
+results {
     margin-top: 20px;
     padding: 20px;
     background: #cbf3f0; /* Light teal background */
@@ -78,6 +81,18 @@ button[type="submit"]:hover {
 
 h2, h3 {
     color: #2ec4b6; /* Heading color for section titles */
+}
+
+a {
+    color: #ff9f1c; /* Link color */
+    text-decoration: none; /* Remove underline */
+    font-weight: bold; /* Bold text */
+    transition: color 0.3s ease; /* Smooth transition for color change */
+}
+
+a:hover {
+    color: #ffbf69; /* Hover state color */
+    text-decoration: underline; /* Underline on hover */
 }
 
 table {
@@ -131,4 +146,3 @@ td {
     padding: 15px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);  /* Subtle shadow for emphasis */
 }
-
