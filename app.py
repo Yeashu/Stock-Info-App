@@ -9,11 +9,23 @@ def index():
 
 @app.route('/stock_info/<ticker>')
 def stock_info(ticker):
-    data = yf.Ticker(ticker)
+    stock = yf.Ticker(ticker)
     try:
-        if(data.info["longName"] == ""):
+        if(stock.info["longName"] == ""):
             return jsonify({'error': 'Invalid ticker'}), 404
-        return jsonify(data.info), 200
+        return jsonify(stock.info), 200
+    except Exception as e:
+        return jsonify({'error': 'Invalid ticker'}), 404
+    
+@app.route('/stock_history/<ticker>')
+def stock_history(ticker):
+    stock = yf.Ticker(ticker)
+    try:
+        if(stock.info["longName"] == ""):
+            return jsonify({'error': 'Invalid ticker'}), 404
+        data = stock.history(period="3mo", interval="1d")
+        data = data[['Open', 'High', 'Low', 'Close', 'Volume']].reset_index()
+        return data.to_json(orient='records', date_format='iso'), 200
     except Exception as e:
         return jsonify({'error': 'Invalid ticker'}), 404
 

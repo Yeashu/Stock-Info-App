@@ -25,3 +25,6 @@ venv.bak/
 *.bak
 *.tmp
 *.log
+
+# random test files
+test.ipynb
