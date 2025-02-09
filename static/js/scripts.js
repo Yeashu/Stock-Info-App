@@ -273,3 +273,262 @@ document.getElementById('stock-form').addEventListener('submit', function(e) {
     const ticker = document.getElementById('stock-symbol').value;
     fetchAndDisplayStockInfo(ticker);
 });
+
+// Store portfolio data in memory
+let portfolioData = {
+    stocks: [], // Array to hold stock positions
+    totalValue: 0,
+    performanceHistory: []
+};
+
+// Create portfolio management functions
+function addToPortfolio(ticker, shares) {
+    // Validate shares is a positive number
+    shares = parseFloat(shares);
+    if (isNaN(shares) || shares <= 0) {
+        throw new Error('Please enter a valid number of shares');
+    }
+
+    // Check if stock already exists in portfolio
+    const existingStock = portfolioData.stocks.find(stock => stock.ticker === ticker);
+    if (existingStock) {
+        existingStock.shares += shares;
+        updatePortfolioValue();
+        return;
+    }
+
+    // Fetch stock data and add to portfolio
+    fetch(`/stock_info/${ticker}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error('Invalid ticker symbol');
+            }
+
+            const stockPosition = {
+                ticker: ticker,
+                shares: shares,
+                purchasePrice: data.currentPrice,
+                currentPrice: data.currentPrice,
+                value: data.currentPrice * shares,
+                companyName: data.longName
+            };
+
+            portfolioData.stocks.push(stockPosition);
+            updatePortfolioValue();
+            displayPortfolio();
+            setupPriceUpdates();
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+}
+
+function removeFromPortfolio(ticker) {
+    portfolioData.stocks = portfolioData.stocks.filter(stock => stock.ticker !== ticker);
+    updatePortfolioValue();
+    displayPortfolio();
+}
+
+function updatePortfolioValue() {
+    portfolioData.totalValue = portfolioData.stocks.reduce((total, stock) => 
+        total + (stock.currentPrice * stock.shares), 0);
+    
+    // Update performance history
+    const today = new Date().toISOString().split('T')[0];
+    portfolioData.performanceHistory.push({
+        date: today,
+        value: portfolioData.totalValue
+    });
+}
+
+// Function to create the portfolio display section
+function createPortfolioSection() {
+    const portfolioSection = createElement('div', {
+        id: 'portfolio-section',
+        className: 'portfolio-section'
+    });
+
+    const header = createElement('h2', {}, 'Portfolio Summary');
+    const totalValue = createElement('h3', {}, `Total Value: $${portfolioData.totalValue.toFixed(2)}`);
+    
+    const addStockForm = createElement('form', {
+        id: 'add-stock-form',
+        className: 'add-stock-form'
+    });
+
+    const tickerInput = createElement('input', {
+        type: 'text',
+        placeholder: 'Stock Symbol',
+        required: true,
+        id: 'portfolio-ticker'
+    });
+
+    const sharesInput = createElement('input', {
+        type: 'number',
+        placeholder: 'Number of Shares',
+        required: true,
+        min: '1',
+        id: 'portfolio-shares'
+    });
+
+    const submitButton = createElement('button', {
+        type: 'submit'
+    }, 'Add to Portfolio');
+
+    addStockForm.append(tickerInput, sharesInput, submitButton);
+    addStockForm.addEventListener('submit', handleAddStock);
+
+    const holdingsTable = createHoldingsTable();
+    const performanceChart = createPerformanceChart();
+
+    portfolioSection.append(header, totalValue, addStockForm, holdingsTable, performanceChart);
+    return portfolioSection;
+}
+
+function createHoldingsTable() {
+    const table = createElement('table', {
+        id: 'holdings-table',
+        className: 'holdings-table'
+    });
+
+    const header = createElement('tr');
+    ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
+        .forEach(text => {
+            const th = createElement('th', {}, text);
+            header.appendChild(th);
+        });
+
+    table.appendChild(header);
+    return table;
+}
+
+function displayPortfolio() {
+    const table = document.getElementById('holdings-table');
+    clearElementContent(table);
+
+    // Recreate header
+    const header = createElement('tr');
+    ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
+        .forEach(text => {
+            const th = createElement('th', {}, text);
+            header.appendChild(th);
+        });
+    table.appendChild(header);
+
+    // Add rows for each stock
+    portfolioData.stocks.forEach(stock => {
+        const row = createElement('tr');
+        const gainLoss = ((stock.currentPrice - stock.purchasePrice) * stock.shares);
+        const gainLossPercent = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100);
+
+        row.append(
+            createElement('td', {}, stock.ticker),
+            createElement('td', {}, stock.companyName),
+            createElement('td', {}, stock.shares),
+            createElement('td', {}, `$${stock.currentPrice.toFixed(2)}`),
+            createElement('td', {}, `$${(stock.currentPrice * stock.shares).toFixed(2)}`),
+            createElement('td', {
+                className: gainLoss >= 0 ? 'positive-gain' : 'negative-gain'
+            }, `$${gainLoss.toFixed(2)} (${gainLossPercent.toFixed(2)}%)`),
+            createElement('td', {}, '')
+        );
+
+        const removeButton = createElement('button', {
+            className: 'remove-button',
+            onclick: () => removeFromPortfolio(stock.ticker)
+        }, 'Remove');
+        
+        row.lastChild.appendChild(removeButton);
+        table.appendChild(row);
+    });
+
+    updatePerformanceChart();
+}
+
+function createPerformanceChart() {
+    const chartContainer = createElement('div', {
+        className: 'chart-container',
+        id: 'portfolio-performance-chart'
+    });
+
+    const canvas = createElement('canvas');
+    chartContainer.appendChild(canvas);
+    return chartContainer;
+}
+
+function updatePerformanceChart() {
+    const canvas = document.querySelector('#portfolio-performance-chart canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Clear existing chart if it exists
+    if (window.portfolioChart) {
+        window.portfolioChart.destroy();
+    }
+
+    window.portfolioChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Portfolio Value',
+                data: portfolioData.performanceHistory.map(entry => ({
+                    x: new Date(entry.date),
+                    y: entry.value
+                })),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'day'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Portfolio Value ($)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Set up periodic price updates
+function setupPriceUpdates() {
+    // Update prices every 5 minutes
+    setInterval(() => {
+        portfolioData.stocks.forEach(stock => {
+            fetch(`/stock_info/${stock.ticker}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        stock.currentPrice = data.currentPrice;
+                        updatePortfolioValue();
+                        displayPortfolio();
+                    }
+                });
+        });
+    }, 300000); // 5 minutes
+}
+
+function handleAddStock(event) {
+    event.preventDefault();
+    const ticker = document.getElementById('portfolio-ticker').value.toUpperCase();
+    const shares = document.getElementById('portfolio-shares').value;
+    addToPortfolio(ticker, shares);
+    event.target.reset();
+}
+
+// Initialize portfolio section when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    const stockInfoDiv = document.getElementById('stock-info');
+    const portfolioSection = createPortfolioSection();
+    document.body.insertBefore(portfolioSection, stockInfoDiv);
+});
