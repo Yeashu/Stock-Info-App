@@ -1,60 +1,132 @@
-// Global variable for the performance chart
-let performanceChart;
+/******************************************
+ * GLOBAL VARIABLES & INITIAL SETUP
+ ******************************************/
+var performanceChart; // Global Chart instance for portfolio performance
+var portfolioData = JSON.parse(localStorage.getItem('portfolio')) || {
+  stocks: [],
+  totalValue: 0,
+  performanceHistory: []
+};
 
-function createElement(tag, attributes = {}, textContent = '') {
-  const element = document.createElement(tag);
-  for (const [key, value] of Object.entries(attributes)) {
-    if (key.startsWith('data-')) {
-      element.setAttribute(key, value);
-    } else {
-      element[key] = value;
+/******************************************
+ * UTILITY FUNCTIONS
+ ******************************************/
+
+/**
+ * Creates an HTML element with optional attributes and text content.
+ * @param {string} tag - The tag name.
+ * @param {object} attrs - Object containing attributes (e.g., { id: 'myId', className: 'myClass' }).
+ * @param {string} text - Optional text content.
+ * @return {HTMLElement} The created element.
+ */
+function createEl(tag, attrs, text) {
+  attrs = attrs || {};
+  var el = document.createElement(tag);
+  for (var key in attrs) {
+    if (attrs.hasOwnProperty(key)) {
+      if (key.indexOf('data-') === 0) {
+        el.setAttribute(key, attrs[key]);
+      } else {
+        el[key] = attrs[key];
+      }
     }
   }
-  if (textContent) element.textContent = textContent;
-  return element;
+  if (text) {
+    el.textContent = text;
+  }
+  return el;
 }
 
-function clearElementContent(element) {
-  element.replaceChildren();
+/**
+ * Clears all child elements of a given element.
+ * @param {HTMLElement} el - The element to clear.
+ */
+function clearEl(el) {
+  el.replaceChildren();
 }
 
+/**
+ * Creates a table row with two cells.
+ * @param {string} label - The text for the first cell.
+ * @param {string} value - The text for the second cell.
+ * @return {HTMLElement} The table row element.
+ */
 function createTableRow(label, value) {
-  const row = createElement('tr');
-  row.append(
-    createElement('td', {}, label),
-    createElement('td', {}, value)
-  );
-  return row;
+  var tr = createEl('tr');
+  tr.appendChild(createEl('td', {}, label));
+  tr.appendChild(createEl('td', {}, value));
+  return tr;
 }
 
+/**
+ * Creates a section with a header and paragraph.
+ * @param {string} title - The header text.
+ * @param {string} content - The paragraph content.
+ * @return {HTMLElement} The section element.
+ */
 function createSection(title, content) {
-  const section = createElement('div');
-  section.append(
-    createElement('h3', {}, title),
-    createElement('p', {}, content)
-  );
-  return section;
+  var sec = createEl('div');
+  sec.appendChild(createEl('h3', {}, title));
+  sec.appendChild(createEl('p', {}, content));
+  return sec;
 }
 
+/**
+ * Displays a temporary modal with a message.
+ * @param {string} message - The message to display.
+ * @param {string} type - The type of message (e.g., 'error' or 'success').
+ */
+function showModal(message, type) {
+  type = type || 'error';
+  var modal = createEl('div', { className: 'modal modal-' + type });
+  var content = createEl('div', { className: 'modal-content' }, message);
+  var closeBtn = createEl('span', { className: 'modal-close' }, '×');
+  closeBtn.onclick = function () {
+    modal.remove();
+  };
+  modal.appendChild(closeBtn);
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  // Remove the modal after 5 seconds
+  setTimeout(function () {
+    modal.remove();
+  }, 5000);
+}
+
+/******************************************
+ * CHART FUNCTIONS
+ ******************************************/
+
+/**
+ * Creates and returns a container with a price/volume chart.
+ * Uses historical data to build a Chart.js chart.
+ * @param {Array} history - Array of historical stock data.
+ * @return {HTMLElement} The container element with the chart.
+ */
 function createPriceChart(history) {
-  // Transform data for the chart
-  const transformedData = history.map(entry => ({
-    x: new Date(entry.Date),
-    y: entry.Close,
-    volume: entry.Volume
-  })).sort((a, b) => a.x - b.x);
+  // Transform and sort historical data
+  var data = history.map(function (entry) {
+    return {
+      x: new Date(entry.Date),
+      y: entry.Close,
+      volume: entry.Volume
+    };
+  });
+  data.sort(function (a, b) {
+    return a.x - b.x;
+  });
   
-  // Create a container div with a canvas for Chart.js
-  const chartContainer = createElement('div', {
+  // Create container and canvas
+  var container = createEl('div', {
     className: 'chart-container',
     style: 'position: relative; height: 400px; width: 100%; margin: 20px 0;'
   });
-  const canvas = createElement('canvas', { id: 'price-chart' });
-  chartContainer.appendChild(canvas);
-  const ctx = canvas.getContext('2d');
+  var canvas = createEl('canvas', { id: 'price-chart' });
+  container.appendChild(canvas);
+  var ctx = canvas.getContext('2d');
   
-  // Determine tick spacing for the x-axis
-  const desiredTickCount = Math.min(12, transformedData.length);
+  // Determine tick count
+  var desiredTicks = Math.min(12, data.length);
   
   new Chart(ctx, {
     type: 'line',
@@ -62,7 +134,7 @@ function createPriceChart(history) {
       datasets: [
         {
           label: 'Close Price',
-          data: transformedData,
+          data: data,
           yAxisID: 'y',
           borderColor: 'rgba(75, 192, 192, 1)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -72,7 +144,9 @@ function createPriceChart(history) {
         },
         {
           label: 'Volume',
-          data: transformedData.map(entry => ({ x: entry.x, y: entry.volume })),
+          data: data.map(function (entry) {
+            return { x: entry.x, y: entry.volume };
+          }),
           yAxisID: 'y1',
           type: 'bar',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
@@ -91,12 +165,9 @@ function createPriceChart(history) {
       scales: {
         x: {
           type: 'time',
-          time: {
-            unit: 'day',
-            displayFormats: { day: 'MMM dd' }
-          },
+          time: { unit: 'day', displayFormats: { day: 'MMM dd' } },
           ticks: {
-            maxTicksLimit: desiredTickCount,
+            maxTicksLimit: desiredTicks,
             autoSkip: true,
             maxRotation: 45
           }
@@ -117,262 +188,36 @@ function createPriceChart(history) {
       },
       plugins: {
         tooltip: { mode: 'index', intersect: false },
-        legend: { display: true, position: 'top', align: 'center', labels: { boxWidth: 20, padding: 15 } }
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'center',
+          labels: { boxWidth: 20, padding: 15 }
+        }
       }
     }
   });
   
-  return chartContainer;
+  return container;
 }
 
-async function fetchAndDisplayStockInfo(ticker) {
-  const stockInfoDiv = document.getElementById('stock-info');
-  clearElementContent(stockInfoDiv);
-  try {
-    const response = await fetch(`/stock_info/${ticker}`);
-    if (!response.ok) throw new Error('Stock not found');
-    const data = await response.json();
-
-    // Main Stock Info and Summary
-    const title = createElement('h2', {}, `${data.longName} (${ticker.toUpperCase()})`);
-    const summary = createSection('Business Summary', data.longBusinessSummary);
-
-    // Fetch historical data and plot the chart
-    const historyResponse = await fetch(`/stock_history/${ticker}`);
-    const history = await historyResponse.json();
-    const priceChart = createPriceChart(history);
-
-    // Build Metrics Table
-    const metrics = [
-      { label: 'Price', value: `$${data.currentPrice.toFixed(2)}` },
-      { label: 'Market Cap', value: `$${data.marketCap.toFixed(2)}` },
-      { label: 'Dividend Yield', value: `${data.dividendYield?.toFixed(2) || 'N/A'}%` },
-      { label: 'EPS', value: `$${data.trailingEps?.toFixed(2) || 'N/A'}` },
-      { label: 'PE Ratio', value: `${data.trailingPE?.toFixed(2) || 'N/A'}` },
-      { label: '52 Week High', value: `$${data.fiftyTwoWeekHigh.toFixed(2)}` },
-      { label: '52 Week Low', value: `$${data.fiftyTwoWeekLow.toFixed(2)}` }
-    ];
-    const metricTable = createElement('table');
-    const headerRow = createElement('tr');
-    headerRow.append(
-      createElement('th', {}, 'Indicator'),
-      createElement('th', {}, 'Value')
-    );
-    metricTable.appendChild(headerRow);
-    metrics.forEach(metric => {
-      if (metric.value) metricTable.appendChild(createTableRow(metric.label, metric.value));
-    });
-
-    // Additional Metrics
-    const additionalMetrics = [
-      { label: 'Beta', value: data.beta?.toFixed(2) || 'N/A' },
-      { label: 'Debt to Equity', value: `${data.debtToEquity?.toFixed(2) || 'N/A'}%` },
-      { label: 'Return on Assets', value: `${(data.returnOnAssets * 100)?.toFixed(2) || 'N/A'}%` },
-      { label: 'Return on Equity', value: `${(data.returnOnEquity * 100)?.toFixed(2) || 'N/A'}%` },
-      { label: 'Revenue Growth', value: `${(data.revenueGrowth * 100)?.toFixed(2) || 'N/A'}%` },
-      { label: 'Profit Margins', value: `${(data.profitMargins * 100)?.toFixed(2) || 'N/A'}%` }
-    ];
-    additionalMetrics.forEach(metric => {
-      if (metric.value) metricTable.appendChild(createTableRow(metric.label, metric.value));
-    });
-
-    // Quick add to portfolio
-    const quickAddDiv = createElement('div', { className: 'quick-add' });
-    const sharesInput = createElement('input', {
-      type: 'number', min: '1', value: '1', placeholder: 'Shares', className: 'shares-input'
-    });
-    const addButton = createElement('button', {
-      className: 'add-to-portfolio',
-      onclick: () => {
-        const shares = parseFloat(sharesInput.value);
-        if (!isNaN(shares) && shares > 0) {
-          addToPortfolio(ticker, shares);
-          alert(`${shares} shares of ${ticker} added to portfolio!`);
-        }
-      }
-    }, 'Add to Portfolio');
-    quickAddDiv.append(sharesInput, addButton);
-
-    // Append all elements to the stock info div
-    stockInfoDiv.append(title, priceChart, metricTable, quickAddDiv, summary,
-                          createElement('a', { href: data.website, target: '_blank' }, 'Company Website'));
-  } catch (error) {
-    stockInfoDiv.appendChild(createElement('h2', {}, error.message));
-    console.error(error);
-  }
-  stockInfoDiv.style.display = 'block';
-}
-
-document.getElementById('stock-form').addEventListener('submit', e => {
-  e.preventDefault();
-  const ticker = document.getElementById('stock-symbol').value;
-  fetchAndDisplayStockInfo(ticker);
-});
-
-// Portfolio data and storage
-let portfolioData = JSON.parse(localStorage.getItem('portfolio')) || {
-  stocks: [],
-  totalValue: 0,
-  performanceHistory: []
-};
-
-function savePortfolioToStorage() {
-  localStorage.setItem('portfolio', JSON.stringify(portfolioData));
-}
-
-function addToPortfolio(ticker, shares) {
-  shares = parseFloat(shares);
-  if (isNaN(shares) || shares <= 0) throw new Error('Please enter a valid number of shares');
-
-  const existingStock = portfolioData.stocks.find(stock => stock.ticker === ticker);
-  if (existingStock) {
-    existingStock.shares += shares;
-    updatePortfolioValue();
-    savePortfolioToStorage();
-    displayPortfolio();
-  } else {
-    fetch(`/stock_info/${ticker}`)
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) throw new Error('Invalid ticker symbol');
-        const stockPosition = {
-          ticker,
-          shares,
-          purchasePrice: data.currentPrice,
-          currentPrice: data.currentPrice,
-          companyName: data.longName
-        };
-        portfolioData.stocks.push(stockPosition);
-        updatePortfolioValue();
-        savePortfolioToStorage();
-        displayPortfolio();
-        setupPriceUpdates();
-      })
-      .catch(error => alert(error.message));
-  }
-}
-
-function removeFromPortfolio(ticker) {
-  portfolioData.stocks = portfolioData.stocks.filter(stock => stock.ticker !== ticker);
-  updatePortfolioValue();
-  savePortfolioToStorage();
-  displayPortfolio();
-}
-
-function updatePortfolioValue() {
-  portfolioData.totalValue = portfolioData.stocks.reduce(
-    (sum, stock) => sum + stock.currentPrice * stock.shares,
-    0
-  );
-  // Add new performance data point with a unique timestamp
-  portfolioData.performanceHistory.push({
-    timestamp: Date.now(),
-    value: portfolioData.totalValue
-  });
-  savePortfolioToStorage();
-  updatePerformanceChart();
-}
-
-function createPortfolioSection() {
-  const portfolioSection = createElement('div', { id: 'portfolio-section', className: 'portfolio-section' });
-  const header = createElement('h2', {}, 'Portfolio Summary');
-  const totalValueElem = createElement('h3', { id: 'portfolio-total-value' }, `Total Value: $${portfolioData.totalValue.toFixed(2)}`);
-
-  // Build add-stock form
-  const addStockForm = createElement('form', { id: 'add-stock-form', className: 'add-stock-form' });
-  const tickerInput = createElement('input', { type: 'text', placeholder: 'Stock Symbol', required: true, id: 'portfolio-ticker' });
-  const sharesInput = createElement('input', { type: 'number', placeholder: 'Number of Shares', required: true, min: '1', id: 'portfolio-shares' });
-  const submitButton = createElement('button', { type: 'submit' }, 'Add to Portfolio');
-  addStockForm.append(tickerInput, sharesInput, submitButton);
-  addStockForm.addEventListener('submit', handleAddStock);
-
-  const holdingsTable = createHoldingsTable();
-  // Create the performance chart container and assign the global performanceChart variable
-  const performanceChartContainer = createPerformanceChart();
-
-  portfolioSection.append(header, totalValueElem, addStockForm, holdingsTable, performanceChartContainer);
-  return portfolioSection;
-}
-
-function createHoldingsTable() {
-  const table = createElement('table', { id: 'holdings-table', className: 'holdings-table' });
-  const header = createElement('tr');
-  ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
-    .forEach(text => header.appendChild(createElement('th', {}, text)));
-  table.appendChild(header);
-  return table;
-}
-
-function displayPortfolio() {
-  // Update total value text
-  const totalValueElem = document.getElementById('portfolio-total-value');
-  if (totalValueElem) {
-    totalValueElem.textContent = `Total Value: $${portfolioData.totalValue.toFixed(2)}`;
-  }
-  
-  const table = document.getElementById('holdings-table');
-  clearElementContent(table);
-  
-  // Recreate table header
-  const header = createElement('tr');
-  ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
-    .forEach(text => header.appendChild(createElement('th', {}, text)));
-  table.appendChild(header);
-  
-  // Create a row for each stock
-  portfolioData.stocks.forEach(stock => {
-    const row = createElement('tr');
-    const gainLoss = (stock.currentPrice - stock.purchasePrice) * stock.shares;
-    const gainLossPercent = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100).toFixed(2);
-    
-    const symbolCell = createElement('td');
-    const symbolLink = createElement('a', {
-      href: '#',
-      onclick: e => {
-        e.preventDefault();
-        fetchAndDisplayStockInfo(stock.ticker);
-        document.getElementById('stock-symbol').value = stock.ticker;
-      }
-    }, stock.ticker);
-    symbolCell.appendChild(symbolLink);
-    
-    row.append(
-      symbolCell,
-      createElement('td', {}, stock.companyName),
-      createElement('td', {}, stock.shares),
-      createElement('td', {}, `$${stock.currentPrice.toFixed(2)}`),
-      createElement('td', {}, `$${(stock.currentPrice * stock.shares).toFixed(2)}`),
-      createElement('td', { className: gainLoss >= 0 ? 'positive-gain' : 'negative-gain' },
-        `$${gainLoss.toFixed(2)} (${gainLossPercent}%)`
-      ),
-      createElement('td', {}, '')
-    );
-    
-    const removeButton = createElement('button', {
-      className: 'remove-button',
-      onclick: () => removeFromPortfolio(stock.ticker)
-    }, 'Remove');
-    row.lastChild.appendChild(removeButton);
-    table.appendChild(row);
-  });
-  
-  updatePerformanceChart();
-}
-
+/**
+ * Creates and returns a container with the performance chart.
+ * Also initializes the global performanceChart variable.
+ * @return {HTMLElement} The container element with the chart.
+ */
 function createPerformanceChart() {
-  // Create a container and a canvas for the performance chart.
-  const container = createElement('div', { className: 'chart-container' });
-  const canvas = createElement('canvas', { id: 'performance-chart' });
+  var container = createEl('div', { className: 'chart-container' });
+  var canvas = createEl('canvas', { id: 'performance-chart' });
   container.appendChild(canvas);
-  const ctx = canvas.getContext('2d');
+  var ctx = canvas.getContext('2d');
   
-  // Initialize the global performanceChart variable.
   performanceChart = new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [{
         label: 'Portfolio Value',
-        data: [], // Data will be set later
+        data: [], // This will be updated dynamically
         borderColor: 'rgba(0, 153, 204, 1)',
         backgroundColor: 'rgba(0, 153, 204, 0.2)',
         fill: true,
@@ -397,55 +242,376 @@ function createPerformanceChart() {
       }
     }
   });
+  
   return container;
 }
 
+/**
+ * Updates the performance chart using the performance history data.
+ */
 function updatePerformanceChart() {
   if (!performanceChart) return;
-  const chartData = portfolioData.performanceHistory.map(point => ({
-    x: new Date(point.timestamp),
-    y: point.value
-  }));
+  var chartData = portfolioData.performanceHistory.map(function (point) {
+    return {
+      x: new Date(point.timestamp),
+      y: point.value
+    };
+  });
   performanceChart.data.datasets[0].data = chartData;
   performanceChart.update();
 }
 
-// Periodic price update every 5 minutes
+/******************************************
+ * STOCK INFO FUNCTIONS
+ ******************************************/
+
+/**
+ * Fetches stock information and historical data and displays it.
+ * @param {string} ticker - The stock ticker symbol.
+ */
+function fetchAndDisplayStockInfo(ticker) {
+  var stockInfoDiv = document.getElementById('stock-info');
+  clearEl(stockInfoDiv);
+  
+  // Use try/catch with promises to handle errors
+  fetch('/stock_info/' + ticker)
+    .then(function (response) {
+      if (!response.ok) {
+        throw new Error('Stock not found');
+      }
+      return response.json();
+    })
+    .then(function (data) {
+      // Create header and business summary
+      var title = createEl('h2', {}, data.longName + ' (' + ticker.toUpperCase() + ')');
+      var summary = createSection('Business Summary', data.longBusinessSummary);
+      
+      // Fetch historical data for the price chart
+      fetch('/stock_history/' + ticker)
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function (history) {
+          var priceChart = createPriceChart(history);
+          // Build metrics table
+          var metrics = [
+            { label: 'Price', value: '$' + data.currentPrice.toFixed(2) },
+            { label: 'Market Cap', value: '$' + data.marketCap.toFixed(2) },
+            { label: 'Dividend Yield', value: data.dividendYield ? data.dividendYield.toFixed(2) + '%' : 'N/A' },
+            { label: 'EPS', value: '$' + (data.trailingEps ? data.trailingEps.toFixed(2) : 'N/A') },
+            { label: 'PE Ratio', value: data.trailingPE ? data.trailingPE.toFixed(2) : 'N/A' },
+            { label: '52 Week High', value: '$' + data.fiftyTwoWeekHigh.toFixed(2) },
+            { label: '52 Week Low', value: '$' + data.fiftyTwoWeekLow.toFixed(2) }
+          ];
+          var metricTable = createEl('table');
+          var headerRow = createEl('tr');
+          headerRow.appendChild(createEl('th', {}, 'Indicator'));
+          headerRow.appendChild(createEl('th', {}, 'Value'));
+          metricTable.appendChild(headerRow);
+          metrics.forEach(function (metric) {
+            if (metric.value) {
+              metricTable.appendChild(createTableRow(metric.label, metric.value));
+            }
+          });
+          
+          // Quick add to portfolio section
+          var quickAdd = createEl('div', { className: 'quick-add' });
+          var sharesInput = createEl('input', {
+            type: 'number',
+            min: '1',
+            value: '1',
+            placeholder: 'Shares',
+            className: 'shares-input'
+          });
+          var addBtn = createEl('button', {
+            className: 'add-to-portfolio',
+            onclick: function () {
+              var shares = parseFloat(sharesInput.value);
+              if (shares > 0) {
+                addToPortfolio(ticker, shares);
+                showModal(shares + ' shares of ' + ticker + ' added to portfolio!', 'success');
+              }
+            }
+          }, 'Add to Portfolio');
+          quickAdd.appendChild(sharesInput);
+          quickAdd.appendChild(addBtn);
+          
+          // Append all elements to the stock info div
+          stockInfoDiv.appendChild(title);
+          stockInfoDiv.appendChild(priceChart);
+          stockInfoDiv.appendChild(metricTable);
+          stockInfoDiv.appendChild(quickAdd);
+          stockInfoDiv.appendChild(summary);
+          // Company website link
+          var websiteLink = createEl('a', { href: data.website, target: '_blank' }, 'Company Website');
+          stockInfoDiv.appendChild(websiteLink);
+        });
+    })
+    .catch(function (error) {
+      showModal(error.message);
+      stockInfoDiv.appendChild(createEl('h2', {}, error.message));
+      console.error(error);
+    });
+  
+  stockInfoDiv.style.display = 'block';
+}
+
+/******************************************
+ * PORTFOLIO MANAGEMENT FUNCTIONS
+ ******************************************/
+
+/**
+ * Saves the portfolio data to local storage.
+ */
+function savePortfolio() {
+  localStorage.setItem('portfolio', JSON.stringify(portfolioData));
+}
+
+/**
+ * Adds a stock to the portfolio.
+ * @param {string} ticker - The stock ticker.
+ * @param {number} shares - The number of shares to add.
+ */
+function addToPortfolio(ticker, shares) {
+  shares = parseFloat(shares);
+  if (isNaN(shares) || shares <= 0) {
+    return showModal('Please enter a valid number of shares');
+  }
+  
+  var existing = portfolioData.stocks.find(function (s) {
+    return s.ticker === ticker;
+  });
+  
+  if (existing) {
+    existing.shares += shares;
+    updatePortfolio();
+    savePortfolio();
+    displayPortfolio();
+  } else {
+    fetch('/stock_info/' + ticker)
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.error) {
+          throw new Error('Invalid ticker symbol');
+        }
+        portfolioData.stocks.push({
+          ticker: ticker,
+          shares: shares,
+          purchasePrice: data.currentPrice,
+          currentPrice: data.currentPrice,
+          companyName: data.longName
+        });
+        updatePortfolio();
+        savePortfolio();
+        displayPortfolio();
+        setupPriceUpdates();
+      })
+      .catch(function (err) {
+        showModal(err.message);
+      });
+  }
+}
+
+/**
+ * Removes a stock from the portfolio.
+ * @param {string} ticker - The ticker symbol to remove.
+ */
+function removeFromPortfolio(ticker) {
+  portfolioData.stocks = portfolioData.stocks.filter(function (s) {
+    return s.ticker !== ticker;
+  });
+  updatePortfolio();
+  savePortfolio();
+  displayPortfolio();
+}
+
+/**
+ * Updates the portfolio's total value and performance history.
+ */
+function updatePortfolio() {
+  portfolioData.totalValue = portfolioData.stocks.reduce(function (sum, s) {
+    return sum + s.currentPrice * s.shares;
+  }, 0);
+  // Record a new performance data point with a unique timestamp
+  portfolioData.performanceHistory.push({
+    timestamp: Date.now(),
+    value: portfolioData.totalValue
+  });
+  savePortfolio();
+  updatePerformanceChart();
+}
+
+/**
+ * Creates and returns a holdings table element.
+ * @return {HTMLElement} The table element.
+ */
+function createHoldingsTable() {
+  var table = createEl('table', { id: 'holdings-table', className: 'holdings-table' });
+  var header = createEl('tr');
+  ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
+    .forEach(function (text) {
+      header.appendChild(createEl('th', {}, text));
+    });
+  table.appendChild(header);
+  return table;
+}
+
+/**
+ * Displays the portfolio by updating the total value, rebuilding the holdings table,
+ * and updating the performance chart.
+ */
+function displayPortfolio() {
+  var totalEl = document.getElementById('portfolio-total-value');
+  if (totalEl) {
+    totalEl.textContent = 'Total Value: $' + portfolioData.totalValue.toFixed(2);
+  }
+  
+  var table = document.getElementById('holdings-table');
+  clearEl(table);
+  
+  // Rebuild table header
+  var header = createEl('tr');
+  ['Symbol', 'Company', 'Shares', 'Current Price', 'Value', 'Gain/Loss', 'Action']
+    .forEach(function (text) {
+      header.appendChild(createEl('th', {}, text));
+    });
+  table.appendChild(header);
+  
+  // Build a row for each stock in the portfolio
+  portfolioData.stocks.forEach(function (stock) {
+    var row = createEl('tr');
+    var gainLoss = (stock.currentPrice - stock.purchasePrice) * stock.shares;
+    var gainLossPct = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100).toFixed(2);
+    
+    var symbolCell = createEl('td');
+    var symbolLink = createEl('a', {
+      href: '#',
+      onclick: function (e) {
+        e.preventDefault();
+        fetchAndDisplayStockInfo(stock.ticker);
+        document.getElementById('stock-symbol').value = stock.ticker;
+      }
+    }, stock.ticker);
+    symbolCell.appendChild(symbolLink);
+    
+    row.appendChild(symbolCell);
+    row.appendChild(createEl('td', {}, stock.companyName));
+    row.appendChild(createEl('td', {}, stock.shares));
+    row.appendChild(createEl('td', {}, '$' + stock.currentPrice.toFixed(2)));
+    row.appendChild(createEl('td', {}, '$' + (stock.currentPrice * stock.shares).toFixed(2)));
+    row.appendChild(createEl('td', {
+      className: (gainLoss >= 0) ? 'positive-gain' : 'negative-gain'
+    }, '$' + gainLoss.toFixed(2) + ' (' + gainLossPct + '%)'));
+    var actionCell = createEl('td');
+    var removeBtn = createEl('button', {
+      className: 'remove-button',
+      onclick: function () {
+        removeFromPortfolio(stock.ticker);
+      }
+    }, 'Remove');
+    actionCell.appendChild(removeBtn);
+    row.appendChild(actionCell);
+    
+    table.appendChild(row);
+  });
+  
+  updatePerformanceChart();
+}
+
+/**
+ * Creates and returns the complete portfolio section element.
+ * @return {HTMLElement} The portfolio section element.
+ */
+function createPortfolioSection() {
+  var section = createEl('div', { id: 'portfolio-section', className: 'portfolio-section' });
+  var header = createEl('h2', {}, 'Portfolio Summary');
+  var totalEl = createEl('h3', { id: 'portfolio-total-value' }, 'Total Value: $' + portfolioData.totalValue.toFixed(2));
+  
+  // Build the add-stock form
+  var addForm = createEl('form', { id: 'add-stock-form', className: 'add-stock-form' });
+  var tickerInput = createEl('input', {
+    type: 'text',
+    placeholder: 'Stock Symbol',
+    required: true,
+    id: 'portfolio-ticker'
+  });
+  var sharesInput = createEl('input', {
+    type: 'number',
+    placeholder: 'Number of Shares',
+    required: true,
+    min: '1',
+    id: 'portfolio-shares'
+  });
+  var submitBtn = createEl('button', { type: 'submit' }, 'Add to Portfolio');
+  addForm.appendChild(tickerInput);
+  addForm.appendChild(sharesInput);
+  addForm.appendChild(submitBtn);
+  addForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    addToPortfolio(
+      document.getElementById('portfolio-ticker').value.toUpperCase(),
+      document.getElementById('portfolio-shares').value
+    );
+    e.target.reset();
+  });
+  
+  var holdingsTable = createHoldingsTable();
+  var perfChartContainer = createPerformanceChart();
+  
+  section.appendChild(header);
+  section.appendChild(totalEl);
+  section.appendChild(addForm);
+  section.appendChild(holdingsTable);
+  section.appendChild(perfChartContainer);
+  return section;
+}
+
+/******************************************
+ * EVENT HANDLERS & INITIALIZATION
+ ******************************************/
+
+/**
+ * Sets up periodic price updates (every 5 minutes).
+ */
 function setupPriceUpdates() {
-  setInterval(() => {
-    portfolioData.stocks.forEach(stock => {
-      fetch(`/stock_info/${stock.ticker}`)
-        .then(response => response.json())
-        .then(data => {
+  setInterval(function () {
+    portfolioData.stocks.forEach(function (stock) {
+      fetch('/stock_info/' + stock.ticker)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
           if (!data.error) {
             stock.currentPrice = data.currentPrice;
-            updatePortfolioValue();
+            updatePortfolio();
             displayPortfolio();
           }
         });
     });
-  }, 300000);
+  }, 300000); // 300,000 ms = 5 minutes
 }
 
-function handleAddStock(event) {
-  event.preventDefault();
-  const ticker = document.getElementById('portfolio-ticker').value.toUpperCase();
-  const shares = document.getElementById('portfolio-shares').value;
-  addToPortfolio(ticker, shares);
-  event.target.reset();
-}
-
-// Initialize the portfolio section on DOM load.
-document.addEventListener('DOMContentLoaded', () => {
-  const stockInfoDiv = document.getElementById('stock-info');
-  const portfolioSection = createPortfolioSection();
-  document.body.insertBefore(portfolioSection, stockInfoDiv);
-  displayPortfolio();
+// Event handler for stock search form submission
+document.getElementById('stock-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var ticker = document.getElementById('stock-symbol').value;
+  fetchAndDisplayStockInfo(ticker);
 });
 
-document.getElementById('toggle-portfolio').addEventListener('click', function() {
-  const portfolioSection = document.querySelector('.portfolio-section');
-  // Toggle display (default to block if empty)
-  portfolioSection.style.display = (portfolioSection.style.display === 'none' || !portfolioSection.style.display) ? 'block' : 'none';
-  this.textContent = portfolioSection.style.display === 'none' ? 'Show Portfolio' : 'Hide Portfolio';
+// Event handler for toggling the portfolio section visibility
+document.getElementById('toggle-portfolio').addEventListener('click', function () {
+  var section = document.querySelector('.portfolio-section');
+  if (!section.style.display || section.style.display === 'none') {
+    section.style.display = 'block';
+    this.textContent = 'Hide Portfolio';
+  } else {
+    section.style.display = 'none';
+    this.textContent = 'Show Portfolio';
+  }
+});
+
+// Initialize portfolio section on DOM load
+document.addEventListener('DOMContentLoaded', function () {
+  var stockInfoDiv = document.getElementById('stock-info');
+  var portfolioSection = createPortfolioSection();
+  document.body.insertBefore(portfolioSection, stockInfoDiv);
+  displayPortfolio();
 });
