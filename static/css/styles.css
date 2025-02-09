@@ -177,6 +177,51 @@ a:hover {
     height: 400px;
 }
 
+/* Quick Add Section */
+.quick-add {
+    margin: 15px 0;
+    display: flex;
+    gap: 10px;
+}
+
+.shares-input {
+    padding: 8px;
+    width: 80px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.add-to-portfolio {
+    padding: 8px 15px;
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.add-to-portfolio:hover {
+    background-color: #138496;
+}
+
+.nav-buttons {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.portfolio-btn {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.portfolio-btn:hover {
+    background-color: #218838;
+}
 
 /* Responsive Design */
 @media (max-width: 768px) {

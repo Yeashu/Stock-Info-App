@@ -252,10 +252,30 @@ async function fetchAndDisplayStockInfo(ticker) {
 
             // Company Website Link
             const websiteLink = createElement('a', { href: data.website, target: '_blank' }, 'Company Website');
-
-            // Append everything to the main container
-            stockInfoDiv.append(title, priceChart, metricTable, summary, websiteLink);
-        } else {
+         
+            const quickAddDiv = createElement('div', { className: 'quick-add' });
+            const sharesInput = createElement('input', {
+                type: 'number',
+                min: '1',
+                value: '1',
+                placeholder: 'Shares',
+                className: 'shares-input'
+            });
+            const addButton = createElement('button', {
+                className: 'add-to-portfolio',
+                onclick: () => {
+                    const shares = parseFloat(sharesInput.value);
+                    if (!isNaN(shares) && shares > 0) {
+                        addToPortfolio(ticker, shares);
+                        alert(`${shares} shares of ${ticker} added to portfolio!`);
+                    }
+                }
+            }, 'Add to Portfolio');
+            quickAddDiv.append(sharesInput, addButton);
+            
+            // Add this line where you append other elements (before the website link):
+            stockInfoDiv.append(title, priceChart, metricTable, quickAddDiv, summary, websiteLink);
+                    } else {
             const errorMessage = createElement('h2', {}, 'Stock not found');
             stockInfoDiv.appendChild(errorMessage);
         }
@@ -274,59 +294,60 @@ document.getElementById('stock-form').addEventListener('submit', function(e) {
     fetchAndDisplayStockInfo(ticker);
 });
 
-// Store portfolio data in memory
-let portfolioData = {
-    stocks: [], // Array to hold stock positions
+// get protfolio data from local storage
+let portfolioData = JSON.parse(localStorage.getItem('portfolio')) || {
+    stocks: [],
     totalValue: 0,
     performanceHistory: []
 };
 
+function savePortfolioToStorage() {
+    localStorage.setItem('portfolio', JSON.stringify(portfolioData));
+}
+
 // Create portfolio management functions
 function addToPortfolio(ticker, shares) {
-    // Validate shares is a positive number
     shares = parseFloat(shares);
     if (isNaN(shares) || shares <= 0) {
         throw new Error('Please enter a valid number of shares');
     }
 
-    // Check if stock already exists in portfolio
     const existingStock = portfolioData.stocks.find(stock => stock.ticker === ticker);
     if (existingStock) {
         existingStock.shares += shares;
-        updatePortfolioValue();
-        return;
+    } else {
+        fetch(`/stock_info/${ticker}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error('Invalid ticker symbol');
+                }
+
+                const stockPosition = {
+                    ticker: ticker,
+                    shares: shares,
+                    purchasePrice: data.currentPrice,
+                    currentPrice: data.currentPrice,
+                    value: data.currentPrice * shares,
+                    companyName: data.longName
+                };
+
+                portfolioData.stocks.push(stockPosition);
+                updatePortfolioValue();
+                savePortfolioToStorage(); // Save to localStorage
+                displayPortfolio();
+                setupPriceUpdates();
+            })
+            .catch(error => {
+                alert(error.message);
+            });
     }
-
-    // Fetch stock data and add to portfolio
-    fetch(`/stock_info/${ticker}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                throw new Error('Invalid ticker symbol');
-            }
-
-            const stockPosition = {
-                ticker: ticker,
-                shares: shares,
-                purchasePrice: data.currentPrice,
-                currentPrice: data.currentPrice,
-                value: data.currentPrice * shares,
-                companyName: data.longName
-            };
-
-            portfolioData.stocks.push(stockPosition);
-            updatePortfolioValue();
-            displayPortfolio();
-            setupPriceUpdates();
-        })
-        .catch(error => {
-            alert(error.message);
-        });
 }
 
 function removeFromPortfolio(ticker) {
     portfolioData.stocks = portfolioData.stocks.filter(stock => stock.ticker !== ticker);
     updatePortfolioValue();
+    savePortfolioToStorage(); // Save to localStorage
     displayPortfolio();
 }
 
@@ -423,7 +444,16 @@ function displayPortfolio() {
         const gainLossPercent = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100);
 
         row.append(
-            createElement('td', {}, stock.ticker),
+            createElement('td', {}, '').appendChild(
+                createElement('a', {
+                    href: '#',
+                    onclick: (e) => {
+                        e.preventDefault();
+                        fetchAndDisplayStockInfo(stock.ticker);
+                        document.getElementById('stock-symbol').value = stock.ticker;
+                    }
+                }, stock.ticker)
+            ),
             createElement('td', {}, stock.companyName),
             createElement('td', {}, stock.shares),
             createElement('td', {}, `$${stock.currentPrice.toFixed(2)}`),
@@ -531,4 +561,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const stockInfoDiv = document.getElementById('stock-info');
     const portfolioSection = createPortfolioSection();
     document.body.insertBefore(portfolioSection, stockInfoDiv);
+
+    // Load and display portfolio data
+    displayPortfolio();
+    updatePerformanceChart();
+});
+
+document.getElementById('toggle-portfolio').addEventListener('click', function() {
+    const portfolioSection = document.querySelector('.portfolio-section');
+    portfolioSection.style.display = portfolioSection.style.display === 'none' ? 'block' : 'none';
+    this.textContent = portfolioSection.style.display === 'none' ? 'Show Portfolio' : 'Hide Portfolio';
 });
