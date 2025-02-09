@@ -426,6 +426,33 @@ function removeFromPortfolio(ticker) {
 }
 
 /**
+ * Removes a specific number of shares from a stock in the portfolio.
+ * If the number to remove is greater than or equal to the current shares,
+ * the entire stock is removed.
+ * @param {string} ticker - The stock ticker.
+ * @param {number} sharesToRemove - The number of shares to remove.
+ */
+function removeSharesFromPortfolio(ticker, sharesToRemove) {
+  var stock = portfolioData.stocks.find(function(s) {
+    return s.ticker === ticker;
+  });
+  if (!stock) {
+    showModal("Stock not found in portfolio.", "error");
+    return;
+  }
+  if (sharesToRemove >= stock.shares) {
+    // If removing equal or more shares than available, remove the entire position.
+    removeFromPortfolio(ticker);
+  } else {
+    stock.shares -= sharesToRemove;
+    updatePortfolio();
+    savePortfolio();
+    displayPortfolio();
+  }
+}
+
+
+/**
  * Updates the portfolio's total value and performance history.
  */
 function updatePortfolio() {
@@ -478,42 +505,72 @@ function displayPortfolio() {
   table.appendChild(header);
   
   // Build a row for each stock in the portfolio
-  portfolioData.stocks.forEach(function (stock) {
-    var row = createEl('tr');
-    var gainLoss = (stock.currentPrice - stock.purchasePrice) * stock.shares;
-    var gainLossPct = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100).toFixed(2);
-    
-    var symbolCell = createEl('td');
-    var symbolLink = createEl('a', {
-      href: '#',
-      onclick: function (e) {
-        e.preventDefault();
-        fetchAndDisplayStockInfo(stock.ticker);
-        document.getElementById('stock-symbol').value = stock.ticker;
+portfolioData.stocks.forEach(function (stock) {
+  var row = createEl('tr');
+  var gainLoss = (stock.currentPrice - stock.purchasePrice) * stock.shares;
+  var gainLossPct = ((stock.currentPrice - stock.purchasePrice) / stock.purchasePrice * 100).toFixed(2);
+  
+  var symbolCell = createEl('td');
+  var symbolLink = createEl('a', {
+    href: '#',
+    onclick: function (e) {
+      e.preventDefault();
+      fetchAndDisplayStockInfo(stock.ticker);
+      document.getElementById('stock-symbol').value = stock.ticker;
+    }
+  }, stock.ticker);
+  symbolCell.appendChild(symbolLink);
+  
+  row.appendChild(symbolCell);
+  row.appendChild(createEl('td', {}, stock.companyName));
+  row.appendChild(createEl('td', {}, stock.shares));
+  row.appendChild(createEl('td', {}, '$' + stock.currentPrice.toFixed(2)));
+  row.appendChild(createEl('td', {}, '$' + (stock.currentPrice * stock.shares).toFixed(2)));
+  row.appendChild(createEl('td', { 
+    className: (gainLoss >= 0) ? 'positive-gain' : 'negative-gain'
+  }, '$' + gainLoss.toFixed(2) + ' (' + gainLossPct + '%)'));
+  
+  // ACTION CELL: Allows removal of a specific number of shares or the entire position.
+  var actionCell = createEl('td');
+  
+  // Input field for the number of shares to remove
+  var removeInput = createEl('input', { 
+    type: 'number', 
+    min: '1', 
+    value: '1',
+    style: 'width: 60px; margin-right: 5px;'
+  });
+  actionCell.appendChild(removeInput);
+  
+  // Button to remove a specific number of shares
+  var removeSharesBtn = createEl('button', {
+    className: 'remove-button',
+    onclick: function () {
+      var sharesToRemove = parseFloat(removeInput.value);
+      if (isNaN(sharesToRemove) || sharesToRemove <= 0) {
+        alert("Please enter a valid number of shares to remove.");
+        return;
       }
-    }, stock.ticker);
-    symbolCell.appendChild(symbolLink);
-    
-    row.appendChild(symbolCell);
-    row.appendChild(createEl('td', {}, stock.companyName));
-    row.appendChild(createEl('td', {}, stock.shares));
-    row.appendChild(createEl('td', {}, '$' + stock.currentPrice.toFixed(2)));
-    row.appendChild(createEl('td', {}, '$' + (stock.currentPrice * stock.shares).toFixed(2)));
-    row.appendChild(createEl('td', {
-      className: (gainLoss >= 0) ? 'positive-gain' : 'negative-gain'
-    }, '$' + gainLoss.toFixed(2) + ' (' + gainLossPct + '%)'));
-    var actionCell = createEl('td');
-    var removeBtn = createEl('button', {
-      className: 'remove-button',
-      onclick: function () {
+      removeSharesFromPortfolio(stock.ticker, sharesToRemove);
+    }
+  }, 'Remove Shares');
+  actionCell.appendChild(removeSharesBtn);
+  
+  // Optional: A button to remove the entire stock position
+  var removeAllBtn = createEl('button', {
+    className: 'remove-button',
+    style: 'margin-left: 5px;',
+    onclick: function () {
+      if (confirm("Remove all shares of " + stock.ticker + "?")) {
         removeFromPortfolio(stock.ticker);
       }
-    }, 'Remove');
-    actionCell.appendChild(removeBtn);
-    row.appendChild(actionCell);
-    
-    table.appendChild(row);
-  });
+    }
+  }, 'Remove All');
+  actionCell.appendChild(removeAllBtn);
+  
+  row.appendChild(actionCell);
+  table.appendChild(row);
+});
   
   updatePerformanceChart();
 }
